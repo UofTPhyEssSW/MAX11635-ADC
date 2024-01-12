@@ -1,0 +1,23 @@
+#######################################
+# Syntax Coloring Map 
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+MAX11635_ADC KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+configure_io KEYWORD2
+begin	KEYWORD2
+end KEYWORD2
+reset KEYWORD2
+analogRead KEYWORD2
+get_voltage KEYWORD2
+to_voltage KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
