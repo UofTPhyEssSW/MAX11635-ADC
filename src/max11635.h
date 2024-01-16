@@ -35,13 +35,22 @@ namespace max11635 {
       using pin_t = std::uint32_t;
       using SPIModule = SPIClassRP2040;
       
-      static constexpr float v_reference         { 2.048F };                 // ADC voltage reference.
-      static constexpr float v_resolution        { v_reference / 4096.0F };  // ADC Voltage steps.
-      static constexpr std::size_t max_channels  { 4 };                      // Maximum number of analog channels.
+      static constexpr float int_v_reference     { 2.500F };                 // ADC voltage reference.
+      static constexpr float max_out_value       { 4095.0F };                // Maximum Binary.
+      static constexpr std::size_t max_channels  { 4UL };                    // Maximum number of analog channels.
           
       driver() noexcept = delete;
-      
-      driver(SPIModule* bus) noexcept : _bus(bus), calibration_offset(CALIBRATION_OFFSET_DEFAULT) { }
+
+      /**
+       * @brief MAX11635 driver constructor.
+       * @param bus [in] Pointer to SPI driver.
+       * @param vref [in] Sets external voltage reference value. default (0.0V) indicates internal voltage reference used.
+       */
+      explicit driver(SPIModule* bus, const float vref = 0.0F) noexcept :
+          _bus(bus),
+          _v_resolution(get_vresolution(vref == 0.0F ? int_v_reference : vref)),
+          _ext_vreference(vref > 0.0F),
+          calibration_offset(CALIBRATION_OFFSET_DEFAULT) { }
       
       void configure_io(pin_t, pin_t, pin_t, pin_t, pin_t, pin_t) noexcept;
       
@@ -50,7 +59,21 @@ namespace max11635 {
       void end() noexcept;
 
       void reset() noexcept;
-      
+      /**
+       * @brief Set ADC voltage reference.
+       * @param vref [in] Sets external voltage reference value. default (0.0V) indicates internal voltage reference used.
+       * @param config [in] Indicates the user wants the adc configured for new v_reference. Default = false.
+       */
+      void set_vreference(const float vref, bool config = false) noexcept {
+        _ext_vreference = vref > 0.0F;
+
+        if(config) {
+          config_regs();
+        }
+
+        _v_resolution = get_vresolution(vref);
+      }
+
       data_type analogRead(std::uint8_t) noexcept;
       float get_voltage(std::uint8_t) noexcept;
       /**
@@ -67,13 +90,13 @@ namespace max11635 {
        * @return true when nEOC pin is LOW 
        * @return false when nEOC is HIGH.
        */
-      bool conversion_ready() const noexcept { 
+      [[nodiscard]] bool conversion_ready() const noexcept {
         return digitalRead(_n_eoc) == LOW;
       }
       /**
        * @brief Clears nEOC pin to HIGH.
        */
-      void clear_nEOC() noexcept {
+      void clear_nEOC() const noexcept {
         digitalWrite(_cs, LOW);
         delayMicroseconds(2);
         digitalWrite(_cs, HIGH);
@@ -114,17 +137,18 @@ namespace max11635 {
        * @return true if nEOC pin is LOW
        * @return false if nEOC pin is HIGH.
        */
-      operator bool() const noexcept {
+      explicit operator bool() const noexcept {
         return this->conversion_ready();
       }
 
-      static float to_voltage(data_type) noexcept;
+      [[nodiscard]] float to_voltage(data_type) const noexcept;
       static void InterruptHandler(driver*) noexcept;
     private:
       static constexpr std::uint8_t dummy_byte { 0x00 };
       static constexpr std::uint32_t fclock_default { 4'000'000 };
       static constexpr data_type CALIBRATION_OFFSET_DEFAULT { 490 };
       static arduino::SPISettings default_setting;
+
       /*
       * SPI MODE 0 : CPOL = 0; CPHA = 0; <= THIS OR
       * SPI MODE 1 : CPOL = 0; CPHA = 1;
@@ -133,6 +157,8 @@ namespace max11635 {
       */
       arduino::SPISettings* _settings { nullptr };
       SPIModule* _bus;
+      float _v_resolution { 0.0F };
+      bool _ext_vreference { false };
       max11635::registers_t _regs { };
       pin_t _mosi       { 23 };
       pin_t _miso       { 20 };
@@ -146,7 +172,11 @@ namespace max11635 {
       data_type current_sample { 0 };
       data_type calibration_offset { 0 };
 
-      void write_nbytes(std::uint8_t*, std::size_t = 1) noexcept;
+      constexpr static float get_vresolution(const float vref) noexcept {
+        return vref / max_out_value;
+      }
+
+      void write_nbytes(const std::uint8_t*, std::size_t = 1) noexcept;
       void read_nbytes(std::uint8_t*, std::size_t = 1) noexcept;
       void initialize() noexcept;
       data_type get_conversion() noexcept;
@@ -156,6 +186,6 @@ namespace max11635 {
 
 extern max11635::driver MAX11635_ADC;
 
-void MAX11635_InteruptHandler() noexcept __attribute__((weak));
+void MAX11635_InterruptHandler() noexcept __attribute__((weak));
 
 #endif

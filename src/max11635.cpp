@@ -11,16 +11,14 @@
 #include "max11635.h"
 
 arduino::SPISettings max11635::driver::default_setting = SPISettings(fclock_default, MSBFIRST, SPIMode::SPI_MODE0);
-
 max11635::driver MAX11635_ADC { &SPI }; /// Default SPI0 
 
 /**
  * @brief Default Interrupt handler for the MAX11635 ADC on the Phyduino Board, can be overridden by function of the same name.
  */
-void MAX11635_InteruptHandler() noexcept {
+void MAX11635_InterruptHandler() noexcept {
   max11635::driver::InterruptHandler(&MAX11635_ADC);
 }
-
 /**
  * @defgroup MAX11635_DRV_PUBLIC MAX11635 Driver public functions
  * @{
@@ -116,7 +114,6 @@ max11635::driver::data_type max11635::driver::analogRead(std::uint8_t channel) n
   
   return current_sample; // Return new sample.
 }
-
 /**
  * @brief Configures IO for SPI/GPIO interface.
  * @param mosi [in] SPI MOSI IO index.
@@ -143,9 +140,8 @@ void max11635::driver::configure_io(pin_t mosi,
 /**
  * @brief [static] Converts the ADC value to a voltage.
  */
-float max11635::driver::to_voltage(const data_type val) noexcept{
-  float voltage = static_cast<float>(val) * max11635::driver::v_resolution;
-  return voltage;
+float max11635::driver::to_voltage(const data_type val) const noexcept{
+  return static_cast<float>(val) * _v_resolution;
 }
 /**
  * @brief 
@@ -154,7 +150,7 @@ float max11635::driver::to_voltage(const data_type val) noexcept{
  */
 float max11635::driver::get_voltage(std::uint8_t channel) noexcept{
   auto value = analogRead(channel);
-  return max11635::driver::to_voltage(value);
+  return to_voltage(value);
 }
 /** @} */
 
@@ -168,7 +164,7 @@ float max11635::driver::get_voltage(std::uint8_t channel) noexcept{
  * @param buf [in] Pointer to Write buffer.
  * @param n [in] Number of bytes to be written.
  */
-void max11635::driver::write_nbytes(std::uint8_t* buf, const std::size_t n) noexcept {
+void max11635::driver::write_nbytes(const std::uint8_t* buf, const std::size_t n) noexcept {
   if(!is_initialized()){
     return;
   }
@@ -272,8 +268,7 @@ void max11635::driver::initialize() noexcept {
     this->clear_nEOC();
   }
 
-  attachInterrupt(digitalPinToInterrupt(_n_eoc), MAX11635_InteruptHandler, LOW);
-
+  attachInterrupt(digitalPinToInterrupt(_n_eoc), MAX11635_InterruptHandler, LOW);
   initialized = true;
 }
 /**
@@ -282,15 +277,14 @@ void max11635::driver::initialize() noexcept {
 void max11635::driver::config_regs() noexcept{
   _regs.reset_all();                        // Reset all register values.
   // Reset Register
-  _regs.reset = 0b1 << 3;            // Clear FIFO and reset registers.
-  write_nbytes(&_regs.reset.w);
+  reset();
   // Conversion Register
   _regs.conversion.b.CHSEL = 0b000U;    // AIN1 selected.
   _regs.conversion.b.SCAN  = 0b11U;     // No scan selection
   write_nbytes(&_regs.conversion.w);
   // Setup Register
   _regs.setup.b.CKSEL   = 0b00U;        // Set Conversion Clock to internal. use nCVST to start conversion and wait for nEOC before reading data.
-  _regs.setup.b.REFSEL  = 0b01U;        // Voltage reference External single-ended
+  _regs.setup.b.REFSEL  = _ext_vreference ? 0b01U : 0b00U; // Voltage reference External single-ended
   _regs.setup.b.DIFFSEL = 0b10U;        // 1 byte of data follows the setup byte and is written to the unipolar mode register.
   _regs.unipolar.w      = 0x00U;        // 1 to configure AIN0 - AIN3 for unipolar differential conversion
   std::uint8_t setup[2] { _regs.setup.w, _regs.unipolar.w };
@@ -326,6 +320,13 @@ max11635::driver::data_type max11635::driver::get_conversion() noexcept {
   current_sample = analog_val == 0 ? analog_val : analog_val + calibration_offset;
 
   return current_sample;
+}
+/**
+ * @brief Software reset of the ADC.
+ */
+void max11635::driver::reset() noexcept {
+  _regs.reset = 0b1 << 3;            // Clear FIFO and reset registers.
+  write_nbytes(&_regs.reset.w);
 }
 
 /** @} */

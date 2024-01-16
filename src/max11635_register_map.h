@@ -211,10 +211,10 @@ namespace max11635 {
   struct registers_t final {
     registers_t() noexcept = default;
 
-    registers_t(const registers_t&) noexcept;
-    registers_t& operator=(const registers_t&) noexcept;
-    registers_t(registers_t&&) noexcept;
-    registers_t& operator=(registers_t&&) noexcept;
+    registers_t(const registers_t&) noexcept = default;
+    registers_t& operator=(const registers_t&) noexcept = default;
+    registers_t(registers_t&&) noexcept = default;
+    registers_t& operator=(registers_t&&) noexcept = default;
 
     void reset_all() noexcept {
       conversion.reset();
